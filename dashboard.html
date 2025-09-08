@@ -5,44 +5,14 @@
   <title>Dashboard – Bieg na orientację</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f9f9f9;
-      margin: 0;
-      padding: 20px;
-    }
-    h1 {
-      text-align: center;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 20px;
-      background: white;
-    }
-    table th, table td {
-      border: 1px solid #ddd;
-      padding: 8px;
-      text-align: center;
-    }
-    table th {
-      background: #4CAF50;
-      color: white;
-    }
-    #refreshBtn {
-      display: block;
-      margin: 20px auto;
-      padding: 10px 20px;
-      font-size: 16px;
-      background: #4CAF50;
-      color: white;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-    }
-    #refreshBtn:hover {
-      background: #45a049;
-    }
+    body { font-family: Arial, sans-serif; background: #f9f9f9; padding: 20px; }
+    h1 { text-align: center; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+    th { background: #4CAF50; color: white; }
+    #refreshBtn { display: block; margin: 20px auto; padding: 10px 20px; font-size: 16px;
+                  background: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; }
+    #refreshBtn:hover { background: #45a049; }
   </style>
 </head>
 <body>
@@ -50,14 +20,10 @@
   <button id="refreshBtn">🔄 Odśwież dane</button>
   <table>
     <thead>
-      <tr>
-        <th>Uczestnik</th>
-        <th>Punkt</th>
-        <th>Czas zaliczenia</th>
-      </tr>
+      <tr><th>Uczestnik</th><th>Punkt</th><th>Czas</th></tr>
     </thead>
     <tbody id="resultsTable">
-      <tr><td colspan="3">Brak danych – kliknij "Odśwież dane"</td></tr>
+      <tr><td colspan="3">Kliknij "Odśwież dane"</td></tr>
     </tbody>
   </table>
 
@@ -65,15 +31,16 @@
   <script>
     async function fetchResults() {
       const tableBody = document.getElementById("resultsTable");
-      tableBody.innerHTML = "<tr><td colspan='3'>⏳ Pobieranie danych...</td></tr>";
+      tableBody.innerHTML = "<tr><td colspan='3'>⏳ Pobieranie...</td></tr>";
 
       try {
-        const response = await fetch(window.APP_SCRIPT_URL + "?action=getLogs");
-        if (!response.ok) throw new Error("Błąd połączenia z serwerem");
-
+        const response = await fetch(window.APP_SCRIPT_URL, {
+          method: "POST",
+          body: JSON.stringify({ action: "getLogs" })
+        });
         const data = await response.json();
 
-        if (data.length === 0) {
+        if (!data || data.length === 0) {
           tableBody.innerHTML = "<tr><td colspan='3'>Brak wyników</td></tr>";
           return;
         }
@@ -81,16 +48,11 @@
         tableBody.innerHTML = "";
         data.forEach(row => {
           const tr = document.createElement("tr");
-          tr.innerHTML = `
-            <td>${row.name}</td>
-            <td>${row.point}</td>
-            <td>${row.time}</td>
-          `;
+          tr.innerHTML = `<td>${row.name}</td><td>${row.point}</td><td>${row.time}</td>`;
           tableBody.appendChild(tr);
         });
       } catch (err) {
-        console.error(err);
-        tableBody.innerHTML = "<tr><td colspan='3'>❌ Nie udało się pobrać danych</td></tr>";
+        tableBody.innerHTML = "<tr><td colspan='3'>❌ Błąd: " + err.message + "</td></tr>";
       }
     }
 

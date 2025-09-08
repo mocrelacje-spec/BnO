@@ -2,108 +2,54 @@
 <html lang="pl">
 <head>
   <meta charset="UTF-8">
-  <title>Bieg na orientację – Skany QR</title>
-  <script src="config.js"></script>
-  <script src="https://unpkg.com/html5-qrcode"></script>
+  <title>Bieg na orientację – Punkt</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      text-align: center;
-      margin: 20px;
-    }
-    #reader {
-      width: 300px;
-      margin: auto;
-    }
-    input, button {
-      padding: 8px;
-      margin: 5px;
-      font-size: 16px;
-    }
-    #status {
-      margin-top: 15px;
-      font-weight: bold;
-    }
+    body { font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 20px; }
+    video { width: 100%; max-width: 400px; border: 2px solid #333; border-radius: 10px; }
+    #result { margin-top: 20px; font-weight: bold; }
   </style>
 </head>
 <body>
-  <h1>Bieg na orientację</h1>
-  <p>Podaj swój identyfikator i rozpocznij skanowanie punktów.</p>
+  <h1>Skanuj kod QR</h1>
+  <video id="preview"></video>
+  <div id="result">Oczekiwanie na skan...</div>
 
-  <input type="text" id="participant" placeholder="Twój ID (np. numer startowy)">
-  <br>
-  <button onclick="startScanner()">Start skanera</button>
-  <div id="reader"></div>
-  <div id="status"></div>
-
+  <script src="https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js"></script>
+  <script src="config.js"></script>
   <script>
-    let scanner = null;
+    const resultDiv = document.getElementById("result");
+    const qrScanner = new Html5Qrcode("preview");
 
-    function startScanner() {
-      const participant = document.getElementById("participant").value.trim();
-      if (!participant) {
-        alert("Wpisz najpierw swój identyfikator!");
-        return;
-      }
-
-      if (scanner) {
-        scanner.stop();
-      }
-
-      scanner = new Html5Qrcode("reader");
-
-      // Wybór tylnej kamery
-      Html5Qrcode.getCameras().then(devices => {
-        if (devices && devices.length) {
-          // ostatnia kamera = tylna w większości urządzeń
-          const cameraId = devices[devices.length - 1].id;
-
-          scanner.start(
-            cameraId,
-            { fps: 10, qrbox: 250 },
-            qrCodeMessage => {
-              handleScan(participant, qrCodeMessage);
-              scanner.stop();
-            },
-            errorMessage => {
-              // ignoruj błędy odczytu
-            }
-          );
-        } else {
-          alert("Nie wykryto żadnej kamery w urządzeniu.");
-        }
-      }).catch(err => {
-        document.getElementById("status").innerText = "❌ Błąd kamery: " + err;
-      });
-    }
-
-    async function handleScan(participant, point) {
-      document.getElementById("status").innerText = "⏳ Wysyłanie...";
-
+    async function onScanSuccess(decodedText) {
+      resultDiv.innerText = "⏳ Wysyłanie danych...";
       try {
-        const response = await fetch(window.APP_SCRIPT_URL, {
+        const url = window.APP_SCRIPT_URL;
+        const response = await fetch(url, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            participant: participant,
-            point: point,
-            device: navigator.userAgent
-          }),
+            action: "logScan",
+            name: prompt("Podaj nuemr patrolu:", "Anonim"),
+            id: decodedText
+          })
         });
 
-        if (!response.ok) {
-          throw new Error("Serwer zwrócił błąd: " + response.status);
-        }
-
         const data = await response.json();
-        document.getElementById("status").innerText =
-          "✅ " + data.message + " (" + point + ")";
+        if (data.status === "ok") {
+          resultDiv.innerText = `✅ Zaliczyłeś punkt ${data.point} o ${data.time}`;
+        } else {
+          resultDiv.innerText = "❌ Błąd: " + data.message;
+        }
       } catch (err) {
-        document.getElementById("status").innerText = "❌ Błąd wysyłki: " + err.message;
+        resultDiv.innerText = "❌ Błąd połączenia: " + err.message;
       }
     }
+
+    qrScanner.start(
+      { facingMode: "environment" }, // tylna kamera
+      { fps: 10, qrbox: 250 },
+      onScanSuccess
+    );
   </script>
 </body>
 </html>
-
-

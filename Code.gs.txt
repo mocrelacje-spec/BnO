@@ -1,0 +1,67 @@
+function doGet(e) {
+  return ContentService.createTextOutput(
+    JSON.stringify({status: "error", message: "Używaj POST"})
+  ).setMimeType(ContentService.MimeType.JSON);
+}
+
+function doPost(e) {
+  try {
+    var data = JSON.parse(e.postData.contents);
+    var action = data.action;
+
+    if (action === "logScan") {
+      return logScan(data);
+    }
+    if (action === "getLogs") {
+      return getLogs();
+    }
+
+    return ContentService.createTextOutput(
+      JSON.stringify({status: "error", message: "Nieznane działanie"})
+    ).setMimeType(ContentService.MimeType.JSON);
+
+  } catch (err) {
+    return ContentService.createTextOutput(
+      JSON.stringify({status: "error", message: err.message})
+    ).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function logScan(data) {
+  var name = data.name || "Anonim";
+  var point = data.id || "Nieznany";
+  var timestamp = new Date();
+
+  var sheet = SpreadsheetApp.openById("Binowo").getSheetByName("Logi");
+  if (!sheet) {
+    sheet = SpreadsheetApp.openById("Binowo").insertSheet("Logi");
+    sheet.appendRow(["Uczestnik", "Punkt", "Czas"]);
+  }
+
+  sheet.appendRow([name, point, timestamp]);
+
+  return ContentService.createTextOutput(
+    JSON.stringify({status: "ok", name: name, point: point, time: timestamp})
+  ).setMimeType(ContentService.MimeType.JSON);
+}
+
+function getLogs() {
+  var sheet = SpreadsheetApp.openById("Binowo").getSheetByName("Logi");
+  if (!sheet) {
+    return ContentService.createTextOutput("[]").setMimeType(ContentService.MimeType.JSON);
+  }
+
+  var data = sheet.getDataRange().getValues();
+  var result = [];
+
+  for (var i = 1; i < data.length; i++) {
+    result.push({
+      name: data[i][0],
+      point: data[i][1],
+      time: data[i][2]
+    });
+  }
+
+  return ContentService.createTextOutput(JSON.stringify(result))
+    .setMimeType(ContentService.MimeType.JSON);
+}
