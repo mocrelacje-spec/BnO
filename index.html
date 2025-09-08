@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BNO – Skaner uczestnika</title>
+  <link rel="manifest" href="data:application/json,{&quot;name&quot;:&quot;BNO QR&quot;,&quot;short_name&quot;:&quot;BNO&quot;}" />
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; margin: 0; padding: 16px; background: #f6f7f9; }
+    .card { background: #fff; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,.06); padding: 16px; margin: 0 auto; max-width: 720px; }
+    h1 { margin-top: 0; }
+    label { display:block; margin: 10px 0 4px; font-weight:600; }
+    input, select, button { font-size: 16px; padding: 10px 12px; border-radius: 10px; border: 1px solid #d0d7de; width: 100%; box-sizing: border-box; }
+    button { cursor: pointer; border: none; background: #2563eb; color: #fff; font-weight: 700; }
+    button.secondary { background: #111827; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .muted { color: #6b7280; font-size: 14px; }
+    #reader { width: 100%; min-height: 300px; border-radius: 12px; overflow: hidden; background: #000; }
+    .ok { color: #059669; }
+    .err { color: #dc2626; }
+    .pill { display:inline-block; padding: 4px 10px; border-radius:999px; background:#eef2ff; font-weight:600; }
+  </style>
+  <!-- html5-qrcode CDN -->
+  <script src="https://unpkg.com/html5-qrcode" defer></script>
+  <script src="./config.js" defer></script>
+</head>
+<body>
+  <div class="card">
+    <h1>🏃‍♂️ BNO – Skaner uczestnika</h1>
+    <p class="muted">Zapisz swoje ID raz, a potem skanuj kody QR na punktach.</p>
+
+    <label for="eventId">ID wydarzenia</label>
+    <input id="eventId" placeholder="np. BNO-2025-09" />
+
+    <label for="participantId">ID uczestnika (nr startowy lub nazwisko)</label>
+    <input id="participantId" placeholder="np. 37 / Kowalski" />
+
+    <div class="row" style="margin-top:12px">
+      <button id="saveBtn">Zapisz dane</button>
+      <button class="secondary" id="resetBtn">Wyczyść</button>
+    </div>
+
+    <p class="muted" id="savedInfo"></p>
+
+    <h2>🧭 Skaner QR punktu</h2>
+    <div id="reader"></div>
+    <p id="status"></p>
+  </div>
+
+<script>
+  const $ = sel => document.querySelector(sel);
+  const saved = JSON.parse(localStorage.getItem("bno_settings") || "{}");
+  const eventIdInput = $("#eventId");
+  const participantIdInput = $("#participantId");
+  if (saved.eventId) eventIdInput.value = saved.eventId;
+  if (saved.participantId) participantIdInput.value = saved.participantId;
+  $("#savedInfo").textContent = saved.eventId ? `Zapisane: ${saved.eventId} / ${saved.participantId}` : "";
+
+  $("#saveBtn").onclick = () => {
+    const eventId = eventIdInput.value.trim();
+    const participantId = participantIdInput.value.trim();
+    if (!eventId || !participantId) { alert("Podaj ID wydarzenia i uczestnika"); return; }
+    localStorage.setItem("bno_settings", JSON.stringify({ eventId, participantId }));
+    $("#savedInfo").textContent = `Zapisane: ${eventId} / ${participantId}`;
+  };
+  $("#resetBtn").onclick = () => {
+    localStorage.removeItem("bno_settings");
+    eventIdInput.value = "";
+    participantIdInput.value = "";
+    $("#savedInfo").textContent = "";
+  };
+
+  function parseCheckpointIdFromText(txt) {
+    // Akceptujemy czyste ID np. CP-3 lub pełny URL z parametrem checkpointId
+    try {
+      if (/^https?:\/\//i.test(txt)) {
+        const u = new URL(txt);
+        return u.searchParams.get("checkpointId") || u.hash.replace(/^#/, "") || u.pathname.split("/").pop();
+      }
+    } catch {}
+    return txt.trim();
+  }
+
+  async function sendCheckin(checkpointId) {
+    const cfg = JSON.parse(localStorage.getItem("bno_settings")||"{}");
+    if (!cfg.eventId || !cfg.participantId) { $("#status").innerHTML = '<span class="err">Najpierw zapisz ID wydarzenia i uczestnika.</span>'; return; }
+    const payload = {
+      eventId: cfg.eventId,
+      participantId: cfg.participantId,
+      checkpointId,
+      clientTsIso: new Date().toISOString()
+    };
+    $("#status").textContent = "Wysyłanie...";
+    try {
+      const res = await fetch(APP_SCRIPT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const json = await res.json();
+      if (json.ok) {
+        $("#status").innerHTML = `✅ <span class="ok">Zaliczone</span> – ${checkpointId} @ ${new Date().toLocaleTimeString()}`;
+      } else {
+        $("#status").innerHTML = `❌ <span class="err">Błąd:</span> ${json.error||'nieznany'}`;
+      }
+    } catch (e) {
+      $("#status").innerHTML = `❌ <span class="err">Błąd sieci:</span> ${String(e)}`;
+    }
+  }
+
+  function onScanSuccess(decodedText) {
+    const checkpointId = parseCheckpointIdFromText(decodedText);
+    sendCheckin(checkpointId);
+  }
+
+  document.addEventListener("DOMContentLoaded", async () => {
+    // Start scanner
+    const scanner = new Html5Qrcode("reader");
+    const configs = { fps: 10, qrbox: 250, rememberLastUsedCamera: true };
+    try {
+      const cameras = await Html5Qrcode.getCameras();
+      const cameraId = (cameras && cameras[0] && cameras[0].id) || { facingMode: "environment" };
+      await scanner.start(cameraId, configs, onScanSuccess);
+    } catch (e) {
+      $("#status").innerHTML = `❌ <span class="err">Kamera niedostępna:</span> ${String(e)}`;
+    }
+  });
+</script>
+</body>
+</html>
