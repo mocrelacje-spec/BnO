@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BNO – Panel organizatora</title>
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; margin: 0; padding: 16px; background:#0b1220; color:#e5e7eb; }
+    .card { background: #111827; border: 1px solid #1f2937; border-radius: 16px; padding: 16px; max-width: 1100px; margin: 0 auto; }
+    h1 { margin-top: 0; }
+    input, button { font-size: 16px; padding: 10px 12px; border-radius: 10px; border: 1px solid #334155; background:#0b1220; color:#e5e7eb; }
+    button { cursor: pointer; background:#2563eb; border: none; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid #1f2937; text-align: left; }
+    th { position: sticky; top: 0; background: #0b1220; }
+    .row { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; }
+    .muted { color:#9ca3af; }
+    .pill { display:inline-block; padding:2px 8px; border-radius:999px; background:#1f2937; font-weight:700; }
+  </style>
+  <script src="./config.js" defer></script>
+</head>
+<body>
+  <div class="card">
+    <h1>📊 BNO – Panel organizatora</h1>
+    <div class="row">
+      <input id="eventId" placeholder="ID wydarzenia, np. BNO-2025-09" />
+      <button id="save">Ustaw</button>
+      <button id="openSheet">Otwórz arkusz</button>
+    </div>
+    <p class="muted">Auto-odświeżanie co 5 s. Sortowanie malejąco po czasie serwera.</p>
+    <div id="summary"></div>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Serwer (ISO)</th>
+          <th>Uczestnik</th>
+          <th>Punkt</th>
+          <th>Klient (ISO)</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+
+<script>
+  const $ = sel => document.querySelector(sel);
+  const savedEventId = localStorage.getItem("bno_event_admin") || "";
+  $("#eventId").value = savedEventId;
+
+  $("#save").onclick = () => {
+    const v = $("#eventId").value.trim();
+    localStorage.setItem("bno_event_admin", v);
+    load();
+  };
+
+  $("#openSheet").onclick = async () => {
+    const r = await fetch(APP_SCRIPT_URL + "?action=sheet");
+    const j = await r.json();
+    if (j.ok && j.url) window.open(j.url, "_blank");
+  };
+
+  async function loadOnce() {
+    const eventId = $("#eventId").value.trim();
+    const url = APP_SCRIPT_URL + "?action=list" + (eventId?("&eventId="+encodeURIComponent(eventId)):"");
+    const res = await fetch(url);
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error || "Błąd API");
+    const entries = json.entries || [];
+    $("#tbody").innerHTML = entries.map((e,i)=>`
+      <tr>
+        <td>${i+1}</td>
+        <td>${e.timestamp_server_iso||""}</td>
+        <td>${e.participant_id||""}</td>
+        <td><span class="pill">${e.checkpoint_id||""}</span></td>
+        <td>${e.client_ts_iso||""}</td>
+      </tr>
+    `).join("");
+
+    // proste podsumowanie: liczba unikalnych uczestników i punktów
+    const uniq = (arr) => Array.from(new Set(arr.filter(Boolean)));
+    const uParts = uniq(entries.map(e=>e.participant_id)).length;
+    const uChk = uniq(entries.map(e=>e.checkpoint_id)).length;
+    $("#summary").innerHTML = `Wpisów: <b>${entries.length}</b> • Uczestników: <b>${uParts}</b> • Punktów: <b>${uChk}</b>`;
+  }
+
+  function load() {
+    loadOnce().catch(err => console.error(err));
+  }
+
+  load();
+  setInterval(load, 5000);
+</script>
+</body>
+</html>

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BNO – Generator QR</title>
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; margin: 0; padding: 16px; background:#fafafa; }
+    .card { background:#fff; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,.06); padding: 16px; max-width: 900px; margin: 0 auto; }
+    input, button { font-size: 16px; padding: 10px 12px; border-radius: 10px; border: 1px solid #d0d7de; }
+    button { background:#2563eb; color:#fff; border: none; cursor: pointer; }
+    .grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-top: 12px; }
+    .qr { border: 1px dashed #d0d7de; border-radius: 12px; padding: 12px; background:#fff; text-align:center; }
+    .muted { color:#6b7280; }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="./config.js"></script>
+</head>
+<body>
+  <div class="card">
+    <h1>🖨️ Generator kodów QR dla punktów</h1>
+    <p class="muted">Wygeneruj kody do druku. Treść QR to pełny URL z parametrem <code>checkpointId</code>.</p>
+    <div>
+      <input id="eventId" placeholder="ID wydarzenia, np. BNO-2025-09" />
+      <input id="prefix" placeholder="Prefiks punktów, np. PK-" />
+      <input id="from" type="number" placeholder="od" style="width:100px" />
+      <input id="to" type="number" placeholder="do" style="width:100px" />
+      <button id="gen">Generuj</button>
+    </div>
+    <div class="grid" id="grid"></div>
+  </div>
+
+<script>
+  const $ = s => document.querySelector(s);
+  $("#gen").onclick = () => {
+    const eventId = $("#eventId").value.trim();
+    const pref = $("#prefix").value.trim() || "PK-";
+    const a = parseInt($("#from").value,10);
+    const b = parseInt($("#to").value,10);
+    if (!eventId || isNaN(a) || isNaN(b) || a>b) { alert("Uzupełnij poprawnie pola."); return; }
+    $("#grid").innerHTML = "";
+    for (let i=a; i<=b; i++) {
+      const id = `${pref}${i}`;
+      const url = `${APP_BASE_URL}?checkpointId=${encodeURIComponent(id)}`;
+      const box = document.createElement("div");
+      box.className = "qr";
+      box.innerHTML = `<div id="qr-${i}"></div><div class="muted">${id}</div>`;
+      $("#grid").appendChild(box);
+      new QRCode(document.getElementById(`qr-${i}`), { text: url, width: 200, height: 200 });
+    }
+  };
+</script>
+</body>
+</html>
